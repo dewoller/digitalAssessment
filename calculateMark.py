@@ -58,7 +58,11 @@ class Marker:
         0.5 marks for partial intragroup ordering
         """
         self.ma=answer
+        self.ma.Code = [ re.sub( r" ", r"", x) for x in self.ma.Code ]
         self.maset = set(self.ma.Code)
+        self.ma.Convention = [ re.sub( r" ", r"", x) for x in self.ma.Convention ]
+        if 'Prefix' in self.ma.columns:
+            self.ma.Prefix = [ re.sub( r" ", r"", x) for x in self.ma.Prefix ]
 
     def mark( self, submission):
         """ return a mark, and a marked up submission
