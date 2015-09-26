@@ -76,6 +76,9 @@ class Marker:
         """ get rid of any rows without a code """
         submission = submission.loc[ np.where( notblank(submission['Code']) )[0]].reset_index(drop=True)
         submission.Code = [ re.sub( r" ", r"", x) for x in submission.Code ]
+        submission.Convention = [ re.sub( r" ", r"", x) for x in submission.Convention ]
+        if 'Prefix' in submission.columns:
+            submission.Prefix = [ re.sub( r" ", r"", x) for x in submission.Prefix ]
 
         # find the unique groups, to traverse later
         self.notes=[]
