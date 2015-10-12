@@ -225,8 +225,8 @@ class Marker:
         submission.loc[ isCorrect, label ] = "Correct"
         nCorrect = sum( isCorrect )
         
-        self.addNote("You had %d correct conventions, gaining %2.1f marks" %(nCorrect, nCorrect * 0.5))
-        self.addMark("%d Correct conventions" % nCorrect, nCorrect * 0.5)
+        self.addNote("You had %d correct conventions, gaining %2.1f marks" %(nCorrect, nCorrect * 1))
+        self.addMark("%d Correct conventions" % nCorrect, nCorrect *  1)
 
 
         return submission
