@@ -24,15 +24,6 @@ logger = logging.getLogger( __name__)
 class Marker:
 
     def __init__(self):
-        # model submission=4xN data frame containing columns:
-        # Code, Grouping, IntragroupOrder, GroupOrder
-        # special grouping - P - principal diagnosis (at start, more marks), L - last code
-        # if no numbers in the intragrouporder column, codes can be in any order
-        # if duplicate numbers in intragrouporder column, order don't care
-        # algorithm
-        # find groups and create groupStart array, groupOrder, groupMarking columns???
-        # check intragroup order
-        # check group order
         # TODO: sanity check model submission;  make sure valid columns exist, make sure everything is correct
         # rules - 
         # TODO: sanity check student submission;  make sure valid columns exist, make sure everything is correct
@@ -41,9 +32,21 @@ class Marker:
         self.marks=[]
 
     def prepareAnswer( self, answer):
+        """
+        # model submission=4xN data frame containing columns:
+        # Code, Grouping, IntragroupOrder, GroupOrder
+        # special grouping - P - principal diagnosis (at start, more marks), L - last code
+        # if no numbers in the intragrouporder column, codes can be in any order
+        # if duplicate numbers in intragrouporder column, order don't care
+        """
+        self.ma=self.dataClean( answer )
+        self.errorCheckMaster(answer)
+
+    def errorCheckMaster( self, answer):
         """ check answer for errors
         
         VALIDATION RULES
+        proper columns
         contigious intragroup order, starting from 1
         all intragroup ordered groups must be fully specified
         groups P and L must be at first and last(s) positions respectively
@@ -57,39 +60,55 @@ class Marker:
         No principal procedure
         0.5 marks for partial intragroup ordering
         """
-        self.ma=answer
-        self.ma.Code = [ re.sub( r" ", r"", x) for x in self.ma.Code ]
-        self.maset = set(self.ma.Code)
-        self.ma.Convention = [ re.sub( r" ", r"", x) for x in self.ma.Convention ]
-        if 'Prefix' in self.ma.columns:
-            self.ma.Prefix = [ re.sub( r" ", r"", x) for x in self.ma.Prefix ]
+        self.errorCheckSubmission( answer ) 
+        for colName in ["Grouping", "IntraGroupOrder", "GroupOrder"]:
+            assert colName in answer.columns, "We need a %s column in the master spreadsheet" % colName
+
+    def errorCheckSubmission( self, answer):
+        """ check answer for errors
+        
+        VALIDATION RULES
+        proper columns
+        
+        """
+        
+        for colName in ["Code", "Convention", "GroupOrder"]:
+            assert colName in answer.columns, "We need a %s column in the master spreadsheet" % colName
+
+    """ standard data cleaning of an answer set.  
+    """
+    def dataClean( self, answer ):
+
+        """ get rid of any rows without a code """
+        answer = answer.loc[ np.where( notblank(answer['Code']) )[0]].reset_index(drop=True) # pylint: disable=E1101
+
+        """ get rid of any spaces """
+        answer.Code = [ re.sub( r" ", r"", x) for x in answer.Code ]
+        answer.Convention = [ re.sub( r" ", r"", x) for x in answer.Convention ]
+        if 'Prefix' in answer.columns:
+            answer.Prefix = [ re.sub( r" ", r"", x) for x in answer.Prefix ]
+        return answer
 
     def mark( self, submission):
         """ return a mark, and a marked up submission
         the latter ready to write back to excel file
+        # algorithm
+        # find groups and create groupStart array, groupOrder, groupMarking columns???
+        # check intragroup order
+        # check group order
         """
 
         """ did the student not submit anything with this name?"""
         if submission is None or len(submission)==0:
             return (pd.DataFrame(), 0)
 
-        """ get rid of any rows without a code """
-        submission = submission.loc[ np.where( notblank(submission['Code']) )[0]].reset_index(drop=True)
-        submission.Code = [ re.sub( r" ", r"", x) for x in submission.Code ]
-        submission.Convention = [ re.sub( r" ", r"", x) for x in submission.Convention ]
-        if 'Prefix' in submission.columns:
-            submission.Prefix = [ re.sub( r" ", r"", x) for x in submission.Prefix ]
+        submission = self.dataClean( submission ) 
 
-        # find the unique groups, to traverse later
         self.notes=[]
         self.markCategory=[]
         self.marks=[]
 
-        # find and tag all the things that look like groups in the submission
-        # a found group is a maximal length set of codes that are ALL in the model answer (with 1 possible mistake)
-        # for example, def can be found in c_def_g, c_de_g, c_d_g, c_df_g
         submission = self.findGroups(submission)
-        #print submission
         submission=self.markUnorderedGroups(submission)
         submission=self.markIntragroupOrder(submission)
         submission=self.markGroupOrder(submission)
@@ -115,6 +134,11 @@ class Marker:
         
         return (submission, totMarks)
 
+    """ 
+        # find and tag all the things that look like groups in the submission
+        # a found group is a maximal length set of codes that are ALL in the model answer (with 1 possible mistake)
+        # for example, def can be found in c_def_g, c_de_g, c_d_g, c_df_g
+    """
     def findGroups(self, submission):
         answerGroups=self.ma.Grouping[ notblank( self.ma.Grouping ) ].unique()
         submission.ix[:, 'Grouping'] = ""
@@ -123,9 +147,11 @@ class Marker:
            submission = self.markGroup( submission, group, self.ma.Code[self.ma.Grouping==group] )
         return submission
 
-    def markGroup( self, submission, groupID, search):
+    """"
         # try to find group length len(codes)..2, from start to finish
         # traverse student submission one by one, see if enough codes exists, stop when found
+    """
+    def markGroup( self, submission, groupID, search):
         foundSlice = self.findSlice(submission.Code, search)
         if len(foundSlice ) != 0:
             # we have found a group, mark it in the submission
@@ -135,7 +161,7 @@ class Marker:
     def findSlice( self, subCodes, search):
         """# subcodes - all the student submission codes
         # search - the model answer group slice we are searching for in subcodes
-        # find the maximum length set of codes in search which match codes in student answer
+        # find the maximum length set of codes in search which match somewhere in the student subCodes
         # try to find some group in subCodes, of length len(codes)..2
         #
         # the most important thing is to match the longest length of search
@@ -192,11 +218,11 @@ class Marker:
         if not 'Prefix' in submission.columns:
             return submission
         prefixes = submission.ix[:,("Code","Prefix")]
-        prefixes.columns = [ "Code","subPrefix"]
+        prefixes.columns = [ "Code","submissionPrefix"]
         if len( prefixes ) == 0:
             return submission
         prefixes = prefixes.merge(self.ma.loc[:, ("Code","Prefix")], how="left", on="Code")
-        isCorrect = list(not pd.isnull( c ) and c==s for s,c in zip(prefixes.subPrefix, prefixes.Prefix))
+        isCorrect = list(not pd.isnull( c ) and c==s for s,c in zip(prefixes.submissionPrefix, prefixes.Prefix))
         submission.ix[ isCorrect, label ] = "Correct"
         nCorrect = sum( isCorrect )
         
@@ -214,14 +240,14 @@ class Marker:
         if not 'Convention' in submission.columns:
             return submission
         conventions = submission.ix[:,("Code","Convention")] 
-        conventions.columns = ["Code","subConvention"]
+        conventions.columns = ["Code","submissionConvention"]
         if len( conventions ) == 0:
             return submission
         conventions = conventions.merge(self.ma.loc[:, ("Code","Convention")], how="left", on="Code")
 
         """ it exists, and conventions match"""
         isCorrect =  list(not pd.isnull( c ) and 
-                bool(re.match( c,s )) for c,s in zip(conventions.Convention, conventions.subConvention))
+                bool(re.match( c,s )) for c,s in zip(conventions.Convention, conventions.submissionConvention))
         submission.loc[ isCorrect, label ] = "Correct"
         nCorrect = sum( isCorrect )
         
@@ -234,13 +260,14 @@ class Marker:
 
     def markUnspecifiedPositions(self,submission):
         sset = set(submission.Code)
-        nCorrect = len( sset & self.maset)
+        maset = set(self.ma.Code)
+        nCorrect = len( sset & maset)
         self.addNote("You had %d correct codes, gaining %2.1f marks" %(nCorrect, nCorrect * 1))
         self.addMark("%d Correct Codes" % nCorrect, nCorrect * 1)
-        noverCode = len( sset.difference(self.maset) )
+        noverCode = len( sset.difference(maset) )
         label='IsCorrectCode?'
         submission.loc[:,label]="Overcoded"
-        submission.loc[ submission.Code.isin( self.maset ),label]="Correct"
+        submission.loc[ submission.Code.isin( maset ),label]="Correct"
 
         if noverCode>0:
             self.addNote("You had %d overcodes" %(noverCode))
@@ -294,7 +321,7 @@ class Marker:
                             % (group, pprintSlice(magSlice)) )
                     self.addMark("Ordered Group %s" % group, 0.5)
                 else:
-                    self.addNote( "Ordered Group %s, answer is %s, you only had %s, too short" % (group, pprintSlice(magSlice), pprintSlice(subSlice)) )
+                    self.addNote( "Ordered Group %s, answer is %s, you only had %s, a single code is not enough for a group" % (group, pprintSlice(magSlice), pprintSlice(subSlice)) )
 
 
         return submission
@@ -338,7 +365,7 @@ class Marker:
                 else:
                     self.addNote( "Incorrect final code(s), should be %s" % ( pprintSlice(magSet)) )
 
-            # we don't need to process the group if it is only 1 code
+            # we don't need to process the group if the master says it is only one code long
             if len( magSet ) == 1:
                 next
 
@@ -402,7 +429,7 @@ class Marker:
 
         """
         if ( 
-                all( not np.isnan( i ) for i in groupOrder.ix[:, "mindex"] )
+                all( not np.isnan( i ) for i in groupOrder.ix[:, "mindex"] ) # pylint: disable=E1101  
                 and all( not groupOrder.ix[i,"Consecutive"] 
                          or groupOrder.ix[i, "maxdex"]+1 == groupOrder.ix[i+1, "mindex"]
                             for i in xrange( len(groupOrder) -1 )
@@ -443,45 +470,31 @@ def eAnd( list_a, list_b ):
 
 
 def usage():
-    print """ Usage: %s 
+    print( """ Usage: %s 
     h=help
     f file = file to parse
-    """ % (sys.argv[0])
+    """ % (sys.argv[0]))
 
 def main(argv):
     import xls2dict, calculateMark
     import pandas as pd
-    reader=xls2dict.Reader("tests/modelAnswer.xlsx") 
-    submission=xls2dict.Reader("tests/testSubmission.xlsx") 
-    sheet="Q1"
-    modelAnswer=reader.dfs[ sheet ]
-    testSubmission=submission.dfs[ sheet ]
+#    reader=xls2dict.Reader("tests/modelAnswer.xlsx") 
+#    submission=xls2dict.Reader("tests/testSubmission.xlsx") 
+#    sheet="Q1"
+#    modelAnswer=reader.dfs[ sheet ]
+#    testSubmission=submission.dfs[ sheet ]
     marker=calculateMark.Marker()
-    marker.prepareAnswer(modelAnswer)
-    print marker.mark(testSubmission)
-    return
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["d",'f', 'g']))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["f",'d', 'g']))
-
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["a", 'c']))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["c", 'e']))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["e", 'g']))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["a", "b", 'd']))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["a", "c", 'd']))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["a","b", "c", "d", "e", "f", "g"]))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["a","b", "c", "d", "e", "g"]))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["a","b", "c", "d", "e", "f"]))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["a", "c", "d", "e", "f", "g"]))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["b", "c", "d", "e", "f", "g"]))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["Z", "c", "d", "e", "f", "g"]))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["a", "a", 'a']))
-    print marker.findSlice( pd.Series(['a', 'b', 'c']), pd.Series(["a", "b","c"]))
-    print marker.findSlice( pd.Series(["Z", 'a', 'b', 'c', 'd']), pd.Series(["a", "b","c"]))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["a","b"]))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["a"]))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["b"]))
-    print marker.findSlice( pd.Series(["a","b", "c", "d", "e", "f", "g"]), pd.Series(["c"]))
+#    marker.prepareAnswer(modelAnswer)
+#    print marker.mark(testSubmission)
+    #return
     
+    reader=xls2dict.Reader("tests/modelAnswer.xlsx", isSubmission=False) 
+    modelAnswer=reader.dfs['Q1']
+    marker.prepareAnswer( modelAnswer )
+    reader1=xls2dict.Reader("tests/testSubmission.xlsx") 
+    modelSubmission=reader1.dfs['Q1']
+    submission=marker.findGroups( modelSubmission )
+    #print(list(submission.Grouping))
 
 if __name__ == "__main__":
     main(sys.argv[1:])
