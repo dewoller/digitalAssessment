@@ -19,11 +19,11 @@ process a single submission / excel file, given this answer and submission
 stores results in results file (for return to student?)
 returns the mark
 """
-def processSubmission( answerFile, submissionFile, resultsFile):
+def processSubmission( answerFile, submissionFile, resultsFilePath):
     modelAnswerReader = xls2dict.Reader(answerFile, isSubmission=False) 
     submissionReader = xls2dict.Reader(submissionFile) 
-    #resultsFile = submissionFile + ".results.xlsx"
-    resultsWriter = pd.ExcelWriter(resultsFile)
+    #resultsFilePath = submissionFile + ".results.xlsx"
+    resultsWriter = pd.ExcelWriter(resultsFilePath)
     marker=calculateMark.Marker()
     perSheetMarks = {}
     perSheetErrors = {}
@@ -68,9 +68,9 @@ def processSubmissionZip( answerFile, submissionZip, outZip, errorFile = None ):
     tmpInDir = tempfile.mkdtemp()
     tmpOutDir = tempfile.mkdtemp()
     resultsFileName = "__Marks.xlsx"
-    secondErrorFileName = "__Errors.xlsx"
-    resultsFile =  tmpOutDir + os.path.sep + resultsFileName
-    secondErrorFile =  tmpOutDir + os.path.sep + secondErrorFileName
+    secondErrorFileName = "__Errors.csv"
+    resultsFilePath =  tmpOutDir + os.path.sep + resultsFileName
+    secondErrorFilePath =  tmpOutDir + os.path.sep + secondErrorFileName
     errorBuffers=[]
     marks={}
     zout = zipfile.ZipFile( outZip, "w")
@@ -92,13 +92,12 @@ def processSubmissionZip( answerFile, submissionZip, outZip, errorFile = None ):
                         errorFrame.loc[:, name ] = id[ name ]
                     errorBuffers.append(errorFrame.to_csv( index=False, header=showHeader))
                     showHeader=False
-
             zout.write(outFile, baseName)
 
 
     # process "perfect student"
 
-    fd,perfectAnswerName = tempfile.mkstemp()
+    fd,perfectAnswerName = tempfile.mkstemp(".xlsx")
     (marks["Perfect"], errorFrameAll) = processSubmission( answerFile, answerFile, perfectAnswerName )
     os.close(fd)
 
@@ -112,12 +111,13 @@ def processSubmissionZip( answerFile, submissionZip, outZip, errorFile = None ):
                     )
 
     # save results file, and error file
-    marks2ExcelFile(marks, resultsFile)
+    marks2ExcelFile(marks, resultsFilePath)
     if errorFile:
       errors2CSV(errorBuffers, errorFile)
 
-    errors2CSV(errorBuffers, secondErrorFileName)
-    zout.write( resultsFile, resultsFileName)
+    errors2CSV(errorBuffers, secondErrorFilePath)
+    zout.write( secondErrorFilePath, secondErrorFileName)
+    zout.write( resultsFilePath, resultsFileName)
     zout.close()
 
 def errors2CSV( errorBuffers, errorFile):
@@ -126,14 +126,14 @@ def errors2CSV( errorBuffers, errorFile):
     f.close()
 
 
-def marks2ExcelFile( marks, resultsFile ):
+def marks2ExcelFile( marks, resultsFilePath ):
     df=pd.DataFrame()
     for person, qmark in marks.iteritems():
         df.ix[person, "Name"] = person
         for question in sorted( qmark ):
             df.ix[ person, question ]  = qmark [ question ]
 
-    resultsWriter = pd.ExcelWriter( resultsFile )
+    resultsWriter = pd.ExcelWriter( resultsFilePath )
     df.to_excel(resultsWriter, "Marks", index=False )
     resultsWriter.save()
     return 

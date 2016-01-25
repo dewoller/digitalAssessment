@@ -1,63 +1,70 @@
 
+
 import sqlite3
-sqlite_file = 'digitalMarking.db'    # name of the sqlite database file
-table_name1 = 'persistant'  # name of the table to be created
-table_name2 = 'errors'  # name of the table to be created
+import os
+sqlite_file = '/tmp/digitalMarking.db'    # name of the sqlite database file
 
-conn=None
+class databaseConnection:
 
-def connect():
-  conn = sqlite3.connect(sqlite_file)
-  return conn.cursor()
+    def __init__(self):
+        self.conn=None
 
+    def connect(self):
+        if not os.path.isfile( sqlite_file ):
+            self.createDB()
 
-def disconnect():
-# Committing changes and closing the connection to the database file
-  conn.commit()
-  conn.close()
-  return
-
-def setPersistant( row ):
-  c=connect()
-  c.execute("""
-  INSERT OR IGNORE 
-  INTO persistant 
-  (key, afile, sfile, id) 
-  VALUES (1, {key}, {afile}, {sfile})
-  """.format(afile = row['afile'], sfile=row['sfile'], id=row['id'])  )
-  disconnect()
-  return
+        self.conn = sqlite3.connect(sqlite_file)
+        return self.conn.cursor()
 
 
-def getPersistant( ):
-  c=connect()
-  c.execute("""
-  SELECT key, afile, sfile
-  from persistant 
-  where key=1
-  """)
-  all_rows = c.fetchall()
-  disconnect()
-  return all_rows
+    def disconnect(self):
+        # Committing changes and closing the connection to the database file
+        self.conn.commit()
+        self.conn.close()
+        return
+
+    def setPersistant( self, row ):
+        c=self.connect()
+        c.execute("""
+        INSERT OR IGNORE 
+        INTO persistant 
+        (key, id) 
+        VALUES (1, :id)
+        """, {"id": row} )
+        self.disconnect()
+        return
 
 
-def createDB():
-  c=connect()
-  # Creating a new SQLite table with 1 column
-  c.execute(
-    """
-    CREATE TABLE persistant (
-    key integer primary key,
-    sfile text, 
-    afile text,
-    id text
-    )
-    """ )
-  c.execute(
-    """
-    insert into persistant (key) values (1)
-    )
-    """
-    )
+    def getPersistant(self ):
+        c=self.connect()
+        c.execute("""
+        SELECT id
+        from persistant 
+        where key=1
+        """)
+        all_rows = c.fetchall()
+        self.disconnect()
+        return all_rows
 
-  disconnect()
+
+    def createDB(self):
+        self.conn = sqlite3.connect(sqlite_file)
+        c = self.conn.cursor()
+        c.execute(
+            """
+            CREATE TABLE persistant (
+            key integer primary key,
+            sfile text, 
+            afile text,
+            id text
+            )
+        """ )
+        c.execute(
+            """
+            insert into persistant (key) values (1)
+            )
+            """
+        )
+        self.conn.commit()
+        self.conn.close()
+
