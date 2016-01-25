@@ -47,17 +47,10 @@ class Reader(object):
         return col.map( lambda f: self.elementToString(f) )
 
     def elementToString(self, x ):
-        if isinstance(x, str):
-            return unicode(x, "utf-8")
-        if isinstance(x, unicode):
-            return x
-        if isinstance(x, int) or isinstance(x, float): 
-            return unicode(str(x), "utf-8")
-        if isinstance(x, datetime.datetime):
-            return unicode(str(x), "utf-8")
-
-        return unicode(str(x), "utf-8")
-
+         
+        if isinstance(x, int) or isinstance(x, float) or isinstance(x, datetime.datetime):
+            return str(x)
+        return(x)
 
     def sheetElementsRegularize( self, sheet ):
         if len(sheet)==0:

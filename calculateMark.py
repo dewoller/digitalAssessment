@@ -27,9 +27,14 @@ class Marker:
         # TODO: sanity check model submission;  make sure valid columns exist, make sure everything is correct
         # rules - 
         # TODO: sanity check student submission;  make sure valid columns exist, make sure everything is correct
+        self.errorColumns = ["Code", "AOI", "Value", "ValueSubmitted", "IsCorrect"]
+        self.initalizeSubmissionDetails()
+
+    def initalizeSubmissionDetails(self):
         self.notes=[]
         self.markCategory=[]
         self.marks=[]
+        self.errorFrame = pd.DataFrame(columns=self.errorColumns)
 
     def prepareAnswer( self, answer):
         """
@@ -100,39 +105,45 @@ class Marker:
 
         """ did the student not submit anything with this name?"""
         if submission is None or len(submission)==0:
-            return (pd.DataFrame(), 0)
+            submission = pd.DataFrame( columns = self.ma.columns)
+            #return (pd.DataFrame(), 0, pd.DataFrame())
 
         submission = self.dataClean( submission ) 
-
-        self.notes=[]
-        self.markCategory=[]
-        self.marks=[]
+        self.initalizeSubmissionDetails()
 
         submission = self.findGroups(submission)
-        submission=self.markUnorderedGroups(submission)
-        submission=self.markIntragroupOrder(submission)
-        submission=self.markGroupOrder(submission)
         submission=self.markUnspecifiedPositions(submission)
-        submission=self.markPrefix(submission)
-        submission=self.markConvention(submission)
 
+        if notblank( self.ma.Grouping ) != []:
+            submission=self.markUnorderedGroups(submission)
+            submission=self.markIntragroupOrder(submission)
+            submission=self.markGroupOrder(submission)
+            submission=self.markPrefix(submission)
+            submission=self.markConvention(submission)
+
+        label = "Marks: Category" 
+        submission = self.addColumn( submission, label )
         for idx, mc in enumerate(self.markCategory):
-            submission.ix[ idx, "Marks: Category" ] = mc
+            submission.loc[ idx, label ] = mc
 
         totMarks = 0
+        label = "Marks: Amount" 
+        submission = self.addColumn(submission, label )
         for idx, mark in enumerate(self.marks):
-            submission.ix[ idx, "Marks: Amount" ] = mark
+            submission.loc[ idx, label ] = mark
             totMarks = totMarks + mark
 
+        label = "Marking Notes" 
+        submission = self.addColumn(submission, label )
         for idx, note in enumerate(self.notes):
-            submission.ix[ idx, "Marking Notes" ] = note
+            submission.loc[ idx, label ] = note
 
-        submission.ix[ len(self.marks)+1, "Marks: Category" ] = ""
-        submission.ix[ len(self.marks)+1, "Marks: Amount" ] = "------------"
-        submission.ix[ len(self.marks)+2, "Marks: Category" ] = "Total"
-        submission.ix[ len(self.marks)+2, "Marks: Amount" ] = totMarks
+        submission.loc[ len(self.marks)+1, "Marks: Category" ] = ""
+        submission.loc[ len(self.marks)+1, "Marks: Amount" ] = "------------"
+        submission.loc[ len(self.marks)+2, "Marks: Category" ] = "Total"
+        submission.loc[ len(self.marks)+2, "Marks: Amount" ] = totMarks
         
-        return (submission, totMarks)
+        return (submission, totMarks, self.errorFrame)
 
     """ 
         # find and tag all the things that look like groups in the submission
@@ -141,8 +152,10 @@ class Marker:
     """
     def findGroups(self, submission):
         answerGroups=self.ma.Grouping[ notblank( self.ma.Grouping ) ].unique()
-        submission.ix[:, 'Grouping'] = ""
-        submission.ix[:, 'Grouping'] = None
+        label = "Grouping" 
+        submission = self.addColumn( submission, label )
+        submission.ix[:, label ] = ""
+        submission.ix[:, label ] = None
         for group in answerGroups:
            submission = self.markGroup( submission, group, self.ma.Code[self.ma.Grouping==group] )
         return submission
@@ -212,8 +225,11 @@ class Marker:
 
 
     def markPrefix(self,submission):
-        """ for each code in submission, mark if it has correct prefix """
+        """ for each code in submission, mark if it has correct prefix 
+            assume all submissions are incorrect, mark those that are correct 
+        """
         label='Prefix?'
+        submission = self.addColumn( submission, label )
         submission.loc[:,label]="Not Correct"
         if not 'Prefix' in submission.columns:
             return submission
@@ -226,16 +242,67 @@ class Marker:
         submission.ix[ isCorrect, label ] = "Correct"
         nCorrect = sum( isCorrect )
         
+        """ 
+        prepare errorframe from a 'what is correct' perspective
+        1) create error dataframe from master, columns Code and prefix
+        1a) rename prefix to Value
+        2) fill submission prefix, matching by code
+        3) fill IsCorrect
+        """
+        errors = self.ma.ix[:,("Code","Prefix")]
+        errors.columns = [ "Code", "Value" ]
+        errors = errors.merge(submission.loc[:, ("Code","Prefix")], how="left", on="Code")
+        errors.columns = [ "Code", "Value", "ValueSubmitted" ]
+        errors = self.addColumn( errors, "AOI" )
+        errors.loc[:,"AOI"]="Prefix"
+        label = "IsCorrect"
+        errors = self.addColumn( errors, label )
+        errors.loc[:, label ]="False"
+        isCorrect = list(not pd.isnull( c ) and c==s 
+                for s,c in zip(errors.Value, errors.ValueSubmitted))
+        errors.ix[ isCorrect, label ] = "True"
+        self.addError(  errors )
+
         self.addNote("You had %d correct prefixes, gaining %2.1f marks" %(nCorrect, nCorrect * 0.5))
         self.addMark("%d Correct prefixes" % nCorrect, nCorrect * 0.5)
 
         return submission
 
+    """ 
+    add list of errors to the global errorframe
+    expects columns:
+        Code
+        AOI
+        IsCorrect
+
+        Value
+        ValueSubmitted
+
+        ActionType should be one of:
+            Code
+            Prefix
+            Convention
+            Grouping
+            OrderedGroup
+            Primary
+            Last
+        XX    MissingCode
+            Overcoded
+            SubstituteCode
+        
+
+    """
+    def addError( self, thisErrorFrame ):
+        if isinstance(thisErrorFrame, dict):
+            self.errorFrame = self.errorFrame.append(thisErrorFrame, ignore_index=True )
+        else:
+            self.errorFrame = self.errorFrame.append(thisErrorFrame )
 
     def markConvention(self,submission):
 
         """ for each code in submission, mark if it has correct convention """
         label='Convention?'
+        submission = self.addColumn( submission, label )
         submission.loc[:,label]="Not Correct"
         if not 'Convention' in submission.columns:
             return submission
@@ -251,12 +318,31 @@ class Marker:
         submission.loc[ isCorrect, label ] = "Correct"
         nCorrect = sum( isCorrect )
         
+        """ 
+        prepare errorframe 
+        """
+        errors = self.ma.ix[:,("Code","Convention")]
+        errors.columns = [ "Code", "Value" ]
+        errors = errors.merge(submission.loc[:, ("Code","Convention")], how="left", on="Code")
+        errors.columns = [ "Code", "Value", "ValueSubmitted" ]
+        errors = self.addColumn( errors, "AOI" )
+        errors.loc[:,"AOI"]="Convention"
+        label = "IsCorrect"
+        errors = self.addColumn( errors, label )
+        errors.loc[:, label ]="False"
+        isCorrect = list(not pd.isnull( c ) and  bool(re.match( c,s ))
+                for s,c in zip(errors.Value, errors.ValueSubmitted))
+        errors.ix[ isCorrect,  label ] = "True"
+        self.addError(  errors )
+
         self.addNote("You had %d correct conventions, gaining %2.1f marks" %(nCorrect, nCorrect * 1))
         self.addMark("%d Correct conventions" % nCorrect, nCorrect *  1)
 
 
         return submission
 
+    def addColumn( self, submission, label) : 
+        return pd.concat([submission, pd.DataFrame(columns=[ label ])])
 
     def markUnspecifiedPositions(self,submission):
         sset = set(submission.Code)
@@ -266,8 +352,46 @@ class Marker:
         self.addMark("%d Correct Codes" % nCorrect, nCorrect * 1)
         noverCode = len( sset.difference(maset) )
         label='IsCorrectCode?'
+        submission = self.addColumn(submission, label )
         submission.loc[:,label]="Overcoded"
         submission.loc[ submission.Code.isin( maset ),label]="Correct"
+
+
+        """ 
+        prepare errorframe  - 1) Correct and incorrect master codes
+        if we have any master codes in this sheet, do it!
+        """
+        if len(self.ma.index) > 0:
+            errors = self.ma.ix[:,("Code","Code", "Code")]
+            errors.columns = [ "Code", "Value", "ValueSubmitted" ]
+            errors = self.addColumn( errors, "AOI" )
+            errors.loc[:,"AOI"]="Codes"
+            label = "IsCorrect"
+            errors = self.addColumn( errors, label )
+            errors.loc[:, label ]="False"
+
+            isCorrect = errors.Code.isin( submission.Code ) 
+            errors.ix[ isCorrect, label ] = "True"
+            errors.ix[ ~ isCorrect, "ValueSubmitted" ] = ""
+
+            self.addError(  errors )
+
+        """ 
+        prepare errorframe  - 2) Overcodes
+        get submitted codes not in master
+        """
+        errors = pd.DataFrame(submission.ix[ ~submission.Code.isin( self.ma.Code ),("Code")])
+        if len( errors.index ) > 0: 
+            errors.columns=["ValueSubmitted"]
+            errors = self.addColumn( errors, "AOI" )
+            errors.loc[:,"AOI"]="Overcode"
+            label = "IsCorrect"
+            errors = self.addColumn( errors, label )
+            errors.loc[:, label ]="False"
+            errors = self.addColumn( errors, "Code" )
+            errors = self.addColumn( errors, "Value" )
+
+            self.addError( errors )
 
         if noverCode>0:
             self.addNote("You had %d overcodes" %(noverCode))
@@ -283,9 +407,9 @@ class Marker:
         for each member of answer group, in order, make sure that the current one
         is after the last one
         .5 marks for each common member
-        .5 marks if all the submission members are in the correct order, according to the answer group
         """
         label='OrderedGroups'
+        submission = self.addColumn(submission, label )
         submission.loc[:,label]=None
 
         # it has a Grouping and an intraGroupOrder
@@ -297,32 +421,59 @@ class Marker:
             submission.loc[ submission.Code.isin( set(magSlice) ), label] = group
             if len( subSlice ) == 0:
                 self.addNote( "Entirely missing Ordered Group %s, should be %s " % (group, pprintSlice(magSlice)) )
+                self.addError( {
+                    'AOI': 'IntraGroupOrder', 
+                    'Value': pprintSlice(magSlice), 
+                    'ValueSubmitted': "",
+                    'Code': "", 
+                    'IsCorrect': "False" 
+                    })
                 next
             currentPos = -1
             stillCorrect=True
             for code in subSlice:
 
                 # what order should this code be in
-                position=self.ma.loc[ self.ma[ self.ma.Code == code ].index,:].IntraGroupOrder
-                position=position[position.index[0]]
+                thisCodeIntraGroupOrder=self.ma.loc[ self.ma[ self.ma.Code == code ].index,:].IntraGroupOrder
+                thisCodeDesiredposition=float( thisCodeIntraGroupOrder[thisCodeIntraGroupOrder.index[0]])
 
                 # we went backwards!
-                if position<currentPos:
+                if thisCodeDesiredposition < currentPos:
                     self.addNote("Ordered Group %s, incorrect order, answer=%s, you had %s" 
                             % (group, pprintSlice(magSlice), pprintSlice(subSlice)))
+                    self.addError( {
+                        'AOI': 'IntraGroupOrder', 
+                        'Value': pprintSlice(magSlice), 
+                        'ValueSubmitted': pprintSlice( subSlice ),
+                        'Code': "", 
+                        'IsCorrect': "False" 
+                        })
                     stillCorrect=False
                     break
                 else:
-                    currentPos = position
+                    currentPos = thisCodeDesiredposition
 
             if stillCorrect:
                 if len( subSlice ) > 1:
                     self.addNote( "Ordered Group %s, answer is %s, completely correct order, 0.5 marks" 
                             % (group, pprintSlice(magSlice)) )
                     self.addMark("Ordered Group %s" % group, 0.5)
+                    self.addError( {
+                        'AOI': 'IntraGroupOrder', 
+                        'Value': pprintSlice(magSlice), 
+                        'ValueSubmitted': pprintSlice( subSlice ),
+                        'Code': "", 
+                        'IsCorrect': "True" 
+                        })
                 else:
                     self.addNote( "Ordered Group %s, answer is %s, you only had %s, a single code is not enough for a group" % (group, pprintSlice(magSlice), pprintSlice(subSlice)) )
-
+                    self.addError( {
+                        'AOI': 'IntraGroupOrder', 
+                        'Value': pprintSlice(magSlice), 
+                        'ValueSubmitted': pprintSlice( subSlice ),
+                        'Code': "", 
+                        'IsCorrect': "False" 
+                        })
 
         return submission
 
@@ -336,16 +487,17 @@ class Marker:
             # for each slice S of size length(uog) , 
             # if uog - S = null set, we have a winner.  Mark group correct
         """
-        label='UnorderedGroups'
+
         maGroups= self.ma[ eAnd( isblank(self.ma.IntraGroupOrder),  notblank(self.ma.Grouping)) ].Grouping.unique()
 
         # P and L groups are taken care of by absoluteOrdering routine.  Different marks too
         #maGroups = set(maGroups).difference( set("P", "L"))
+        label='UnorderedGroups'
+        submission = self.addColumn(submission, label )
         submission.loc[:,label]=None
         for group in maGroups:
             # take the group slice
             magSet = set( self.ma[ self.ma.Grouping==group].Code)
-#            import pdb;pdb.set_trace()
             subSlice = submission[ submission.Grouping==group].Code
             subSet = set( subSlice )
             nCorrect=len( magSet & subSet )
@@ -354,16 +506,43 @@ class Marker:
                 if nCorrect == len(magSet ) : # all correct, principal
                     self.addNote( "Correct principal diagnosis, 1 mark"  )
                     self.addMark("Principal Diagnosis", 1)
+                    self.addError( {
+                        'AOI': 'PrincipalCode', 
+                        'Value': pprintSlice(magSet), 
+                        'ValueSubmitted': pprintSlice( subSet ),
+                        'Code': "", 
+                        'IsCorrect': "True" 
+                        })
                 else:
                     self.addNote( "Incorrect principal diagnosis, answer is %s, you had %s " % ( pprintSlice(magSet), pprintSlice(subSet)) )
+                    self.addError( {
+                        'AOI': 'PrincipalCode', 
+                        'Value': pprintSlice(magSet), 
+                        'ValueSubmitted': pprintSlice( subSet ),
+                        'Code': "", 
+                        'IsCorrect': "False" 
+                        })
                 next
 
             if group=="L" : # Last Codes 
                 if len(subSlice) > 0 and max( subSlice.index )  == max(submission.index ):
                     self.addNote( "Correct final codes, 0.5 marks"  )
                     self.addMark( "Final Code(s) Group", 0.5 )
+                    self.addError( {
+                        'AOI': 'LastCode', 
+                        'Value': pprintSlice(magSet), 
+                        'ValueSubmitted': pprintSlice( subSet ),
+                        'Code': "", 
+                        'IsCorrect': "True" 
+                        })
                 else:
                     self.addNote( "Incorrect final code(s), should be %s" % ( pprintSlice(magSet)) )
+                    self.addError( { 'AOI': 'LastCode', 
+                        'Code': "", 
+                        'IsCorrect': "False" ,
+                        'Value': pprintSlice(magSet), 
+                        'ValueSubmitted': pprintSlice( subSet ),
+                        })
 
             # we don't need to process the group if the master says it is only one code long
             if len( magSet ) == 1:
@@ -374,12 +553,30 @@ class Marker:
             if nCorrect == len(magSet ) : # all correct
                 self.addNote( "Unordered Group %s, %s entirely correct, 0.5 marks" % (group, pprintSlice(magSet)) )
                 self.addMark("Unordered Group %s" % group, 0.5)
+                self.addError( { 'AOI': 'UnorderedGroup', 
+                    'Code': "", 
+                    'IsCorrect': "True" ,
+                    'Value': pprintSlice(magSet), 
+                    'ValueSubmitted': pprintSlice( subSet ),
+                    })
             elif (nCorrect > 0 ) :
                 self.addNote( "Unordered Group %s partially correct, answer is %s, you had %s, 0.5 marks " 
                         % (group, pprintSlice(magSet), pprintSlice(subSet)) )
                 self.addMark("Unordered Group %s" % group, 0.5)
+                self.addError( { 'AOI': 'UnorderedGroup', 
+                    'Code': "", 
+                    'IsCorrect': "False" ,
+                    'Value': pprintSlice(magSet), 
+                    'ValueSubmitted': pprintSlice( subSet ),
+                    })
             else:
                 self.addNote( "Unordered Group %s, %s entirely missing" % (group, pprintSlice(magSet)) )
+                self.addError( { 'AOI': 'UnorderedGroup', 
+                    'Code': "", 
+                    'IsCorrect': "False" ,
+                    'Value': pprintSlice(magSet), 
+                    'ValueSubmitted': "",
+                    })
 
         return submission
 
@@ -432,17 +629,31 @@ class Marker:
                 all( not np.isnan( i ) for i in groupOrder.ix[:, "mindex"] ) # pylint: disable=E1101  
                 and all( not groupOrder.ix[i,"Consecutive"] 
                          or groupOrder.ix[i, "maxdex"]+1 == groupOrder.ix[i+1, "mindex"]
-                            for i in xrange( len(groupOrder) -1 )
+                            for i in range( len(groupOrder) -1 )
                        )
 
                 and all( groupOrder.ix[i, "GroupOrder"] <= groupOrder.ix[i+1, "GroupOrder"]  
-                         for i in xrange( len(groupOrder) -1 )
+                         for i in range( len(groupOrder) -1 )
                         )
              ):
             self.addNote( "Correct ALL group ordering, 0.5 marks"  )
             self.addMark("All Groups Ordering", 0.5)
+            self.addError( { 'AOI': 'AllGroupsOrdering', 
+                'Code': "", 
+                'IsCorrect': "True" ,
+                'Value': "", 
+                'ValueSubmitted': "",
+                })
+
         else:
             self.addNote( "Incorrect ALL group ordering"  )
+            self.addError( { 'AOI': 'AllGroupsOrdering', 
+                'Code': "", 
+                'IsCorrect': "False" ,
+                'Value': "", 
+                'ValueSubmitted': "",
+                })
+
 
         return submission
 
@@ -493,8 +704,11 @@ def main(argv):
     marker.prepareAnswer( modelAnswer )
     reader1=xls2dict.Reader("tests/testSubmission.xlsx") 
     modelSubmission=reader1.dfs['Q1']
+    #submission=marker.findGroups( modelSubmission )
     submission=marker.findGroups( modelSubmission )
     #print(list(submission.Grouping))
+    submission=marker.markIntragroupOrder(submission)
+    assert( list( submission.Grouping ) == [u'P', None, u'B', None, u'A', u'A', u'A', u'A', None, u'L', None, u'L', None])
 
 if __name__ == "__main__":
     main(sys.argv[1:])
