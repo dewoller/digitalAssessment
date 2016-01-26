@@ -59,7 +59,7 @@ def processSubmissionZip( answerFile, submissionZip, outZip, errorFile = None ):
     for name in  identityErrorColumns:
         id[ name ] = ""
     match=re.search( ".*submissions/([^/]*)/([^/]*)/CMR_(\d*).*", answerFile )
-    
+    #TODO: need to process class/week/question from ID which we don't have in web 
     if match:
         id["class"]=match.group(1)
         id["week"]=match.group(2)
