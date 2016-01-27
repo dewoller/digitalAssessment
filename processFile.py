@@ -86,7 +86,7 @@ def processSubmissionZip( answerFile, submissionZip, outZip, errorFile = None ):
                 print ("FILE=\n\"%s\"\n" % inFile )
             outFile= tmpOutDir + os.path.sep + baseName
             (marks[ baseName ], errorFrameAll) = processSubmission(answerFile, inFile, outFile)
-            for id["sheet"], errorFrame in errorFrameAll.iteritems():
+            for id["sheet"], errorFrame in errorFrameAll.items():
                 if len(errorFrame.index) >0 :
                     for name in  identityErrorColumns:
                         errorFrame.loc[:, name ] = id[ name ]
@@ -102,7 +102,7 @@ def processSubmissionZip( answerFile, submissionZip, outZip, errorFile = None ):
     os.close(fd)
 
     id["student"]="Perfect"
-    for id["sheet"], errorFrame in errorFrameAll.iteritems():
+    for id["sheet"], errorFrame in errorFrameAll.items():
         if len(errorFrame.index) >0 :
             for name in  identityErrorColumns:
                 errorFrame.loc[:, name ] = id[ name ]
@@ -128,7 +128,7 @@ def errors2CSV( errorBuffers, errorFile):
 
 def marks2ExcelFile( marks, resultsFilePath ):
     df=pd.DataFrame()
-    for person, qmark in marks.iteritems():
+    for person, qmark in marks.items():
         df.ix[person, "Name"] = person
         for question in sorted( qmark ):
             df.ix[ person, question ]  = qmark [ question ]

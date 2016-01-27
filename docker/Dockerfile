@@ -1,5 +1,9 @@
 FROM tailordev/pandas
 
+pip3 install \
+	xlrd \
+	openpyxl
+
 WORKDIR /pandas
 VOLUME /pandas
 

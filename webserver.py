@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #    --notebook-dir=/pandas/notebooks
 
 """Simple HTTP Server With Upload.
@@ -108,8 +108,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             os.close(fd)
             f=open(outputFile, "rb")
             fs = os.fstat(f.fileno())
-            f.close()
-            f=open(outputFile, "r")
         except IOError:
             self.send_error(404, "File not found")
             return None
@@ -118,7 +116,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(fs[6]))
         self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
         self.end_headers()
-        shutil.copyfileobj(f, self.wfile)
+        self.wfile.write(f.read())
         f.close()
         return
 
