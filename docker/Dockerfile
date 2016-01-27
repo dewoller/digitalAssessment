@@ -53,7 +53,9 @@ RUN apt-get install -y \
 
 RUN pip3 install \
     bokeh \
-    seaborn 
+    seaborn \
+    openpyxl \
+    openpyxl.style \
 
 RUN pip install \
     tdaemon 
