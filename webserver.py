@@ -69,7 +69,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "text/html")
         self.send_header("Content-Length", str(length))
         self.end_headers()
-        shutil.copyfileobj(f, self.wfile)
+        self.wfile.write(f.getvalue().encode())
         f.close()
 
 
@@ -91,18 +91,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         db.setPersistant( parm[ 'id' ]) 
         return ( parm )
 
-        for field in form.keys():
-            field_item = form[field]
-            if field_item.filename:
-                # The field contains an uploaded file
-                file_data = field_item.file.read()
-                file_len = len(file_data)
-                self.wfile.write('\tUploaded %s as "%s" (%d bytes)\n' % \
-                        (field, field_item.filename, file_len))
-            else:
-                # Regular form value
-                self.wfile.write('\t%s=%s\n' % (field, form[field].value))
-
 
     def do_POST(self):
         # Parse the form data posted
@@ -119,12 +107,14 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             processFile.processSubmissionZip( parm['a'], parm['s'], outputFile )
             os.close(fd)
             f=open(outputFile, "rb")
+            fs = os.fstat(f.fileno())
+            f.close()
+            f=open(outputFile, "r")
         except IOError:
             self.send_error(404, "File not found")
             return None
         self.send_response(200)
         self.send_header("Content-type", "application/zip")
-        fs = os.fstat(f.fileno())
         self.send_header("Content-Length", str(fs[6]))
         self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
         self.end_headers()
