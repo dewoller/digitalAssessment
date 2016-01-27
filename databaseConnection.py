@@ -62,7 +62,6 @@ class databaseConnection:
         c.execute(
             """
             insert into persistant (key) values (1)
-            )
             """
         )
         self.conn.commit()

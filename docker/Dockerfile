@@ -30,8 +30,8 @@ RUN apt-get install -y \
     libpng-dev \
     libzmq3-dev \
     python3-software-properties \
-    python2 \
-    python2-pip \
+    python \
+    python-pip \
     python3-pip \
     python3-requests \
     python3-simplejson \
@@ -44,8 +44,10 @@ RUN apt-get install -y \
     python3-tornado \
     python3-matplotlib \
     python3-xlrd \
+    libyaml-dev \
     python3-nose2 \
     ipython3-notebook 
+
 #    apt-get clean && \
 #    rm -rf /var/lib/apt/lists/*
 
@@ -56,9 +58,11 @@ RUN pip3 install \
 RUN pip install \
     tdaemon 
 
-
 WORKDIR /pandas
+VOLUME /pandas
 
+
+EXPOSE 8888
 #RUN ipython3 profile create default
 #RUN rm ~/.ipython/profile_default/ipython_notebook_config.py
 #RUN ln -s /notebooks/ipython_notebook_config.py ~/.ipython/profile_default/ipython_notebook_config.py

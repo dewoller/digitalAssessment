@@ -30,7 +30,7 @@ def processSubmission( answerFile, submissionFile, resultsFilePath):
     errorFrame= pd.DataFrame()
     for sheet in sorted(modelAnswerReader.getSheetNames()):
         if _debug==1:
-            print "%s" % sheet
+            print( "%s" % sheet)
         marker.prepareAnswer(modelAnswerReader.getSheet( sheet ))
         (resultSheet, marks, errorFrame) = marker.mark( submissionReader.getSheet( sheet ))
         resultSheet.to_excel(resultsWriter, sheet, index=False)
@@ -83,7 +83,7 @@ def processSubmissionZip( answerFile, submissionZip, outZip, errorFile = None ):
             if match:
                 id["student"]=match.group(1)
             if _debug==1:
-                print "FILE=\n\"%s\"\n" % inFile 
+                print ("FILE=\n\"%s\"\n" % inFile )
             outFile= tmpOutDir + os.path.sep + baseName
             (marks[ baseName ], errorFrameAll) = processSubmission(answerFile, inFile, outFile)
             for id["sheet"], errorFrame in errorFrameAll.iteritems():
@@ -139,7 +139,7 @@ def marks2ExcelFile( marks, resultsFilePath ):
     return 
 
 def usage():
-    print "ha:s:dz:v:, [help, answerfile=, submissionfile=, zipfile=, savefile=]) "
+    print ( "ha:s:dz:v:, [help, answerfile=, submissionfile=, zipfile=, savefile=]) ")
 
 
 def main(argv):
@@ -185,9 +185,9 @@ def main(argv):
         usage()
         sys.exit()
     if submissionFile != "":
-        print processSubmission(answerFile,submissionFile, saveFile)
+        print (processSubmission(answerFile,submissionFile, saveFile))
     elif submissionZip  != "":
-        print processSubmissionZip(answerFile,submissionZip, saveFile, errorFile)
+        print (processSubmissionZip(answerFile,submissionZip, saveFile, errorFile))
     else:
         usage()
     

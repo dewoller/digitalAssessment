@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+#    --notebook-dir=/pandas/notebooks
 
 """Simple HTTP Server With Upload.
 
@@ -15,7 +16,7 @@ __home_page__ = "http://luy.li/"
 
 import os
 import posixpath
-import BaseHTTPServer
+from http.server import BaseHTTPRequestHandler,HTTPServer
 import urllib
 import cgi
 import shutil
@@ -25,14 +26,14 @@ import tempfile
 import processFile
 import databaseConnection
 db = databaseConnection.databaseConnection()
- 
+
 try:
     from cStringIO import StringIO
 except ImportError:
-    from StringIO import StringIO
+    from io import StringIO
 
 
-class SimpleHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
     """Simple HTTP request handler with GET/HEAD/POST commands.
 
@@ -133,11 +134,17 @@ class SimpleHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
 
 
-
-def test(HandlerClass = SimpleHTTPRequestHandler,
-         ServerClass = BaseHTTPServer.HTTPServer):
-    BaseHTTPServer.test(HandlerClass, ServerClass)
-
 if __name__ == '__main__':
-    test()
+    try:
+        # Create a web server and define the handler to manage the
+        # incoming request
+        server = HTTPServer(('', 8888), SimpleHTTPRequestHandler)
+        print ('Started httpserver on port ' , 8888)
+
+        # Wait forever for incoming http requests
+        server.serve_forever()
+
+    except KeyboardInterrupt:
+        print ('^C received, shutting down the web server')
+        server.socket.close()
 
