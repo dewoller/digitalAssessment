@@ -44,8 +44,8 @@ class Marker:
         # if no numbers in the intragrouporder column, codes can be in any order
         # if duplicate numbers in intragrouporder column, order don't care
         """
-        self.ma=self.dataClean( answer )
         self.errorCheckMaster(answer)
+        self.ma=self.dataClean( answer )
 
     def errorCheckMaster( self, answer):
         """ check answer for errors

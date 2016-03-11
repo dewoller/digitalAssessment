@@ -88,8 +88,8 @@ def main(argv):
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
     LOGGER.addHandler(ch)
-    r = Reader(infile)
-    print(r.dfs[0])
+    #r = Reader(infile)
+    #print(r.dfs[0])
     
 
 if __name__ == "__main__":
