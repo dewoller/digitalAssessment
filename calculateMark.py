@@ -454,7 +454,7 @@ class Marker:
                     currentPos = thisCodeDesiredposition
 
             if stillCorrect:
-                if len( subSlice ) > 1:
+                if len( subSlice ) > 1 or len(subSlice ) == len( magSlice ) :
                     self.addNote( "Ordered Group %s, answer is %s, completely correct order, 0.5 marks" 
                             % (group, pprintSlice(magSlice)) )
                     self.addMark("Ordered Group %s" % group, 0.5)
