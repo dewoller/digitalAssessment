@@ -2,7 +2,7 @@
 # code to read in an xls sheet, return a dict of sheets of values
 
 
-import sys, getopt
+import sys, getopt, xlrd
 import pandas as pd
 import logging
 import unicodedata
@@ -13,24 +13,66 @@ _debug=1
 class Reader(object):
     """Read in an excel sheet"""
 
-    def __init__(self, filename, isSubmission=True):
-        xl_file = pd.ExcelFile(filename)
+    def __init__(self, path, isSubmission=True):
+        if isSubmission:
+            self.getSubmissionExcelSheets( path )
+        else:
+            self.getMasterExcelSheets( path )
+    
+    def getSubmissionExcelSheets( self, path ):
+        """ 
+        Q1 C,D,E, 4-24 prefix, code, convention
+        Q1P - DE, 27-47 code, convention
+        """
+        indexes = {
+                'Q1':  {
+                        2: 'Prefix',
+                        3: 'Code',
+                        4: 'Convention'
+                        },
+                'Q1P': {
+                        3: 'Code',
+                        4: 'Convention'
+                        }
+                }
+        sheet = xlrd.open_workbook(path).sheet_by_index(0)
+        self.dfs={}
+        data={}
+        for col, name in indexes['Q1'].items():
+            cells = sheet.col_slice(colx=col,
+                                    start_rowx=3,
+                                    end_rowx=23)
+            data[ name ] = map (lambda x: self.getCellValue( x ), cells )
+
+        self.dfs[ 'Q1' ] = pd.DataFrame( data )
+    
+        data={}
+        for col, name in indexes['Q1P'].items():
+            cells = sheet.col_slice(colx=col,
+                                    start_rowx=26,
+                                    end_rowx=47)
+            data[ name ] = map (lambda x: self.getCellValue( x ), cells )
+
+        self.dfs[ 'Q1P' ] = pd.DataFrame( data )
+    
+    def getCellValue( self, cell ):
+        return str(cell.value)
+
+    def getMasterExcelSheets( self, path):
+        xl_file = pd.ExcelFile(path)
         self.dfs = {}
         for sheet in xl_file.sheet_names:
             #import ipdb; ipdb.set_trace()
-            maxcols=3
+            maxcols=6
             if sheet[-2:-1] == "P":
                 maxcols=2
-
-            if not isSubmission:
-                maxcols  = maxcols + 3
 
             self.dfs[sheet] = self.sheetElementsRegularize( xl_file.parse(sheet, parse_cols=maxcols ))
             try:
                 # throw away errors
                 pass
             except:
-                LOGGER.error( "Error with sheet %s in file %s "% (sheet, filename))
+                LOGGER.error( "Error with sheet %s in file %s "% (sheet, path))
             
     def getSheet(self, name):
         """ get sheet of name """

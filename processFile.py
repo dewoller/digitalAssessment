@@ -19,9 +19,13 @@ process a single submission / excel file, given this answer and submission
 stores results in results file (for return to student?)
 returns the mark
 """
-def processSubmission( answerFile, submissionFile, resultsFilePath):
-    modelAnswerReader = xls2dict.Reader(answerFile, isSubmission=False) 
-    submissionReader = xls2dict.Reader(submissionFile) 
+def processSubmissionFiles( answerFile, submissionFile, resultsFilePath):
+    return( processSubmissionReaders( 
+                xls2dict.Reader(answerFile, isSubmission=False) ,
+                xls2dict.Reader(submissionFile) ,
+                resultsFilePath ))
+
+def processSubmissionReaders( modelAnswerReader, submissionReader, resultsFilePath):
     #resultsFilePath = submissionFile + ".results.xlsx"
     resultsWriter = pd.ExcelWriter(resultsFilePath)
     marker=calculateMark.Marker()
@@ -74,41 +78,33 @@ def processSubmissionZip( answerFile, submissionZip, outZip, errorFile = None ):
     errorBuffers=[]
     marks={}
     zout = zipfile.ZipFile( outZip, "w")
+    modelAnswerReader = xls2dict.Reader(answerFile, isSubmission=False)
     with zipfile.ZipFile(submissionZip, "r") as z:
         for name in z.namelist():
             z.extract( name, tmpInDir )
             baseName =ntpath.basename(name) 
-            inFile = tmpInDir + os.path.sep + name
-            match = re.search(tmpInDir + "/([^_]*).*", inFile)
+            submissionFile = tmpInDir + os.path.sep + name
+            submissionReader = xls2dict.Reader(submissionFile)
+            match = re.search(tmpInDir + "/([^_]*).*", submissionFile)
             if match:
                 id["student"]=match.group(1)
             if _debug==1:
-                print ("FILE=\n\"%s\"\n" % inFile )
+                print ("FILE=\n\"%s\"\n" % submissionFile )
             outFile= tmpOutDir + os.path.sep + baseName
-            (marks[ baseName ], errorFrameAll) = processSubmission(answerFile, inFile, outFile)
-            for id["sheet"], errorFrame in errorFrameAll.items():
-                if len(errorFrame.index) >0 :
-                    for name in  identityErrorColumns:
-                        errorFrame.loc[:, name ] = id[ name ]
-                    errorBuffers.append(errorFrame.to_csv( index=False, header=showHeader))
-                    showHeader=False
+            (marks[ baseName ], errorFrameAll) = processSubmissionReaders(modelAnswerReader, submissionReader, outFile)
+            appendErrorFrame( errorBuffers, errorFrameAll, name, id, showHeader )
+            showHeader=False
             zout.write(outFile, baseName)
 
 
     # process "perfect student"
-
+    # make up a temp file to place the results
     fd,perfectAnswerName = tempfile.mkstemp(".xlsx")
-    (marks["Perfect"], errorFrameAll) = processSubmission( answerFile, answerFile, perfectAnswerName )
+    (marks["Perfect"], errorFrameAll) = processSubmissionReaders( modelAnswerReader, modelAnswerReader, perfectAnswerName )
     os.close(fd)
 
     id["student"]="Perfect"
-    for id["sheet"], errorFrame in errorFrameAll.items():
-        if len(errorFrame.index) >0 :
-            for name in  identityErrorColumns:
-                errorFrame.loc[:, name ] = id[ name ]
-            errorBuffers.append(
-                    errorFrame.to_csv( index=False, header=showHeader)
-                    )
+    appendErrorFrame( errorBuffers, errorFrameAll, name, id, showHeader )
 
     # save results file, and error file
     marks2ExcelFile(marks, resultsFilePath)
@@ -124,6 +120,13 @@ def errors2CSV( errorBuffers, errorFile):
     f = open(errorFile, 'w')
     f.write( "".join( errorBuffers ) )
     f.close()
+
+def appendErrorFrame( errorBuffers, errorFrameAll, name, id, showHeader ):
+    for id["sheet"], errorFrame in errorFrameAll.items():
+        if len(errorFrame.index) >0 :
+            for name in  identityErrorColumns:
+                errorFrame.loc[:, name ] = id[ name ]
+            errorBuffers.append( errorFrame.to_csv( index=False, header=showHeader))
 
 
 def marks2ExcelFile( marks, resultsFilePath ):
@@ -185,7 +188,7 @@ def main(argv):
         usage()
         sys.exit()
     if submissionFile != "":
-        print (processSubmission(answerFile,submissionFile, saveFile))
+        print (processSubmissionFiles(answerFile,submissionFile, saveFile))
     elif submissionZip  != "":
         print (processSubmissionZip(answerFile,submissionZip, saveFile, errorFile))
     else:
