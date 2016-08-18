@@ -24,8 +24,8 @@ import mimetypes
 import re
 import tempfile
 import processFile
-import databaseConnection
-db = databaseConnection.databaseConnection()
+#import databaseConnection
+#db = databaseConnection.databaseConnection()
 
 try:
     from cStringIO import StringIO
@@ -56,13 +56,14 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         f.write("<html>\n<title>Mark Coding Assignments</title>\n" )
         f.write("<body>\n<h2>Mark Coding Assignments</h2>\n" )
         f.write("<hr>\n")
-        f.write("<form ENCTYPE=\"multipart/form-data\" method=\"post\">")
-        id=db.getPersistant()
-        f.write("""Assignment ID:        <input name="id" type="text" value="{id}"/> <br/>"""
-                .format( id=id ))
-        f.write("Answer file name    : <input name=\"a\" type=\"file\"/> <br/>")
-        f.write("Submission file name: <input name=\"s\" type=\"file\"/> <br/>")
-        f.write("<input type=\"submit\" value=\"upload\"/></form>\n")
+        f.write("""<form ENCTYPE="multipart/form-data" method="post">""")
+        #id=db.getPersistant()
+        f.write("""Assignment ID (What name do you give to this assignment):        <input name="id" type="text" /> <br/>""")
+        f.write("""Answer file name (excel file)    : <input name="answerFile" type="file"/> <br/>""")
+        f.write("""Submission file name (zip file)  : <input name="submissionFile" type="file"/> <br/>""")
+        f.write("<br/>")
+        f.write("<br/>")
+        f.write("""<input type="submit" value="Mark Submissions"/></form>\n""")
         length = f.tell()
         f.seek(0)
         self.send_response(200)
@@ -81,14 +82,14 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                      'CONTENT_TYPE':self.headers['Content-Type'],
                      })
         parm={}
-        fd, parm['s'] = tempfile.mkstemp(".zip")
-        os.write(fd, form['s'].file.read())
+        fd, parm['submissionFile'] = tempfile.mkstemp(".zip")
+        os.write(fd, form['submissionFile'].file.read())
         os.close( fd )
-        fd, parm['a'] = tempfile.mkstemp(".xlsx")
-        os.write(fd, form['a'].file.read())
+        fd, parm['answerFile'] = tempfile.mkstemp(".xlsx")
+        os.write(fd, form['answerFile'].file.read())
         os.close(fd)
         parm[ 'id' ] = form['id'].value
-        db.setPersistant( parm[ 'id' ]) 
+        #db.setPersistant( parm[ 'id' ]) 
         return ( parm )
 
 
@@ -104,7 +105,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
             # Always read in binary mode. Opening files in text mode may cause
             # newline translations, making the actual size of the content
             # transmitted *less* than the content-length!
-            processFile.processSubmissionZip( parm['a'], parm['s'], outputFile )
+            processFile.processSubmissionZip( parm['answerFile'], parm['submissionFile'], outputFile )
             os.close(fd)
             f=open(outputFile, "rb")
             fs = os.fstat(f.fileno())

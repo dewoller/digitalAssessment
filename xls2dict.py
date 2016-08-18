@@ -37,24 +37,19 @@ class Reader(object):
                 }
         sheet = xlrd.open_workbook(path).sheet_by_index(0)
         self.dfs={}
-        data={}
-        for col, name in indexes['Q1'].items():
-            cells = sheet.col_slice(colx=col,
-                                    start_rowx=3,
-                                    end_rowx=23)
-            data[ name ] = map (lambda x: self.getCellValue( x ), cells )
-
-        self.dfs[ 'Q1' ] = pd.DataFrame( data )
+        self.dfs[ 'Q1' ] =self.getExcelChunk( sheet, 3, 23, indexes['Q1'].items() )
+        self.dfs[ 'Q1P' ] =self.getExcelChunk( sheet, 26, 47, indexes['Q1P'].items() )
     
+    def getExcelChunk( self, sheet, start, end, cols ):
         data={}
-        for col, name in indexes['Q1P'].items():
+        for col, name in cols:
             cells = sheet.col_slice(colx=col,
-                                    start_rowx=26,
-                                    end_rowx=47)
-            data[ name ] = map (lambda x: self.getCellValue( x ), cells )
+                                    start_rowx=start,
+                                    end_rowx=end)
+            data[ name ] = list( self.getCellValue( x ) for x in cells  ) 
+        
+        return pd.DataFrame( data )
 
-        self.dfs[ 'Q1P' ] = pd.DataFrame( data )
-    
     def getCellValue( self, cell ):
         return str(cell.value)
 
